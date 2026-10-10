@@ -5,9 +5,50 @@ import { Orchestrator } from "../../src/core/orchestrator";
 import { Simulator } from "../../src/core/simulator";
 import { TaskQueue } from "../../src/tasks/task-queue";
 import { Agent } from "../../src/agents/agent";
-import { TASK_KINDS } from "../../src/tasks/task";
+import { TASK_KINDS, type Task } from "../../src/tasks/task";
+import { EventLogger } from "../../src/metrics/event-log";
+import { createCompletedEvent } from "../helpers/helper";
+import { totalTicks } from "../../src/metrics/metrics";
+import { EVENT_TYPES } from "../../src/metrics/events";
 
 describe("Simulator", () => {
+  it("registra un evento de tarea completada en el tick en que el agente termina", () => {
+    const agent = new Agent({
+      strength: 1,
+      dexterity: 1,
+      energy: 100,
+    });
+
+    const task = {
+      difficulty: 5,
+      id: crypto.randomUUID(),
+      kind: TASK_KINDS.COOK,
+      status: "pending" as const,
+      takenBy: undefined,
+      requiredItems: [],
+    };
+
+    const queue = new TaskQueue();
+
+    queue.enqueue(task);
+
+    const blackboard = new Blackboard(queue);
+    const orchestrator = new Orchestrator();
+    const logger = new EventLogger();
+
+    const simulator = new Simulator([agent], orchestrator, blackboard, logger);
+
+    simulator.run(15);
+
+    const logs = logger.getLogs();
+    const completedEvents = logs.filter(
+      (e) => e.type === EVENT_TYPES.TASK_COMPLETED,
+    );
+
+    expect(completedEvents.length).toBe(1);
+    expect(totalTicks(logs)).toBe(5);
+  });
+
   it("todas las tasks están: done", () => {
     const agents = createTestAgents();
     const queue = createMixedTasks(10);

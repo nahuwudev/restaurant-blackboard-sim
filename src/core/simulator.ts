@@ -1,4 +1,6 @@
 import type { Agent } from "../agents/agent";
+import type { EventLogger } from "../metrics/event-log";
+import { EVENT_TYPES } from "../metrics/events";
 import { scoreAction } from "../utility/evaluator";
 import type { Blackboard } from "./blackboard";
 import type { Orchestrator } from "./orchestrator";
@@ -7,22 +9,24 @@ export class Simulator {
   blackboard: Blackboard;
   orchestrator: Orchestrator;
   agents: Agent[];
+  logger?: EventLogger;
 
   constructor(
     agent: Agent[],
     orchestrator: Orchestrator,
     blackboard: Blackboard,
+    logger?: EventLogger,
   ) {
     this.blackboard = blackboard;
     this.orchestrator = orchestrator;
     this.agents = agent;
+    this.logger = logger;
   }
 
   run(ticks: number) {
     const queue = this.blackboard.getQueue();
 
     for (let i = 0; i < ticks; i++) {
-      // 1. trabajar o descansar
       for (const ag of this.agents) {
         const taskId = ag.currentTaskId;
         if (taskId === undefined) {
@@ -30,10 +34,17 @@ export class Simulator {
           continue;
         }
         ag.work();
-        if (ag.currentTaskId === undefined) queue.complete(taskId);
+        if (ag.currentTaskId === undefined) {
+          queue.complete(taskId);
+          this.logger?.emit({
+            type: EVENT_TYPES.TASK_COMPLETED,
+            tick: this.blackboard.getTick(),
+            taskId: taskId,
+            agentId: ag.id,
+          });
+        }
       }
 
-      // 2. los agentes libres eligen su mejor tarea y pujan una sola vez
       const snapshot = this.blackboard.getSnapshot();
       const pending = queue.pending();
       for (const ag of this.agents) {
@@ -46,7 +57,6 @@ export class Simulator {
         if (best) this.orchestrator.bid(ag, best.id, best.score);
       }
 
-      // 3. resolver y cobrar energía
       const assigned = this.orchestrator.resolve(
         queue,
         this.blackboard.getTick(),

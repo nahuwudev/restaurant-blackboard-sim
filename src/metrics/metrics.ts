@@ -2,7 +2,7 @@ import type { TaskKind } from "../tasks/task";
 import { EVENT_TYPES } from "./events";
 import type { SimulationEvent } from "./types";
 
-export function totalTicks(events: SimulationEvent[]) {
+export function totalTicks(events: readonly SimulationEvent[]) {
   const completedEvents = events.filter(
     (e) => e.type === EVENT_TYPES.TASK_COMPLETED,
   );

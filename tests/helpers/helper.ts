@@ -3,6 +3,7 @@ import type {
   TaskCreatedEvent,
   TaskTakenEvent,
   TaskCompletedEvent,
+  TickEndEvent,
 } from "../../src/metrics/types";
 import { TASK_KINDS } from "../../src/tasks/task";
 
@@ -45,4 +46,15 @@ export function createCompletedEvent(
     agentId: "agent-1",
     ...overrides,
   };
+}
+
+export function createTickEndEvent(
+  overrides?: Partial<TickEndEvent>,
+): TickEndEvent {
+  return {
+    type: EVENT_TYPES.TICK_END,
+    tick: 1,
+    energies: {},
+    ...overrides
+  }
 }
