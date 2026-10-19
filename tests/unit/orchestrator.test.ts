@@ -6,6 +6,8 @@ import { TaskQueue } from "../../src/tasks/task-queue";
 import { scoreAction } from "../../src/utility/evaluator";
 import { Blackboard } from "../../src/core/blackboard";
 import { createMixedTasks, createTestAgents } from "../helpers/factories";
+import { EventLogger } from "../../src/metrics/event-log";
+import { EVENT_TYPES } from "../../src/metrics/events";
 
 describe("Orchestrator", () => {
   it("un agente hace la primera puja sobre una tarea vacía, el método devuelva true y registre la oferta.", () => {
@@ -36,6 +38,143 @@ describe("Orchestrator", () => {
     const resolved = queue.getAll().find((t) => t.task.id === task?.task.id);
     expect(resolved?.task.takenBy).toBe(agent.id);
     expect(resolved?.task.status).toBe("taken");
+  });
+
+  it("emite exactamente 1 evento de conflicto si hay dos o más postores para una misma tarea", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent1 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent2 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent1, taskId, 10);
+    orchestrator.bid(agent2, taskId, 8);
+
+    orchestrator.resolve(queue, 0);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(1);
+  });
+
+  it("no arrastra conflictos de la ronda anterior al llamar a resolve dos veces", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent1 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent2 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent1, taskId, 10);
+    orchestrator.bid(agent2, taskId, 8);
+    orchestrator.resolve(queue, 0);
+
+    orchestrator.resolve(queue, 1);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(1);
+  });
+
+  it("un solo postor da 0 conflictos", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent, taskId, 10);
+    orchestrator.resolve(queue, 0);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(0);
+  });
+
+  it("tres postores en la misma tarea emiten exactamente 1 evento de conflicto", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent1 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent2 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent3 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent1, taskId, 10);
+    orchestrator.bid(agent2, taskId, 8);
+    orchestrator.bid(agent3, taskId, 6);
+
+    orchestrator.resolve(queue, 0);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(1);
+  });
+
+  it("dos tareas disputadas en la misma ronda emiten 2 eventos de conflicto", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent1 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent2 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const task1 = crypto.randomUUID();
+    const task2 = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent1, task1, 10);
+    orchestrator.bid(agent2, task1, 8);
+
+    orchestrator.bid(agent1, task2, 5);
+    orchestrator.bid(agent2, task2, 9);
+
+    orchestrator.resolve(queue, 0);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(2);
+  });
+
+  it("un agente que puja dos veces por la misma tarea no genera conflicto", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent, taskId, 5);
+    orchestrator.bid(agent, taskId, 10);
+    orchestrator.resolve(queue, 0);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(0);
+  });
+
+  it("no arrastra conflictos y el evento ocurre estrictamente en el tick 0", () => {
+    const logger = new EventLogger();
+    const orchestrator = new Orchestrator(logger);
+    const agent1 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const agent2 = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    const taskId = crypto.randomUUID();
+    const queue = new TaskQueue();
+
+    orchestrator.bid(agent1, taskId, 10);
+    orchestrator.bid(agent2, taskId, 8);
+    orchestrator.resolve(queue, 0);
+
+    orchestrator.resolve(queue, 1);
+
+    const conflicts = logger
+      .getLogs()
+      .filter((e) => e.type === EVENT_TYPES.CONFLICT);
+    expect(conflicts.length).toBe(1);
+    expect(conflicts[0]?.tick).toBe(0);
   });
 
   it("dos agentes pujan por la misma tarea, gana el de mayor score, el perdedor no queda asignado.", () => {

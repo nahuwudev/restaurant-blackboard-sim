@@ -15,8 +15,8 @@ export interface TaskTakenEvent {
   kind: TaskKind;
   agentId: string;
   aptitude: number;
-  agentBest: string;
-  teamBest: string[];
+  agentBest: number;
+  teamBest: number;
 }
 
 export interface TaskCompletedEvent {

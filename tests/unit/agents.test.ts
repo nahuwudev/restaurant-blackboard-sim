@@ -55,6 +55,17 @@ describe("Ejecución manual de tareas según estadísticas de agentes", () => {
     expect(secondScore).toBeGreaterThan(0);
   });
 
+  it("calcula el bestAptitude correctamente según las estadísticas del agente", () => {
+    const strongAgent = new Agent({ strength: 9, dexterity: 2, energy: 100 });
+    expect(strongAgent.bestAptitude()).toBe(0.9); // Cocinar con strength 9 -> 0.9
+
+    const agileAgent = new Agent({ strength: 2, dexterity: 9, energy: 100 });
+    expect(agileAgent.bestAptitude()).toBe(0.9); // Lavar/Servir con dexterity 9 -> 0.9 (empate)
+
+    const balancedAgent = new Agent({ strength: 5, dexterity: 5, energy: 100 });
+    expect(balancedAgent.bestAptitude()).toBe(0.5); // Prep (5+5)/20 -> 0.5
+  });
+
   it("debe variar el tiempo y el consumo de energía según los stats de cada agente", () => {
     const strongAgent = new Agent({
       strength: 10,

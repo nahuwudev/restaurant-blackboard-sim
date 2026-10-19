@@ -9,13 +9,48 @@ export class Blackboard {
   private agents: AgentSnapshot[] = [];
   private taskQueue: TaskQueue;
 
+  private restockInterval?: number;
+  private restockItems?: Record<string, number>;
+
   constructor(queue: TaskQueue) {
     this.taskQueue = queue;
+  }
+
+  setRestockSchedule(intervalTicks: number, items: Record<string, number>): void {
+    this.restockInterval = intervalTicks;
+    this.restockItems = structuredClone(items);
   }
 
   tick(): void {
     this.currentTick++;
     this.taskQueue.ageTasks(this.currentTick);
+
+    if (
+      this.restockInterval &&
+      this.currentTick % this.restockInterval === 0 &&
+      this.restockItems
+    ) {
+      this.restock(this.restockItems);
+    }
+  }
+
+  hasResources(requiredItems: readonly string[]): boolean {
+    if (!requiredItems || requiredItems.length === 0) return true;
+    return requiredItems.every((item) => (this.inventory[item] ?? 0) > 0);
+  }
+
+  consumeResources(requiredItems: readonly string[]): boolean {
+    if (!this.hasResources(requiredItems)) return false;
+    for (const item of requiredItems) {
+      this.inventory[item] = (this.inventory[item] ?? 0) - 1;
+    }
+    return true;
+  }
+
+  restock(items: Record<string, number>): void {
+    for (const [item, quantity] of Object.entries(items)) {
+      this.inventory[item] = (this.inventory[item] || 0) + quantity;
+    }
   }
 
   registerAgent(agent: AgentSnapshot): void {
@@ -30,7 +65,7 @@ export class Blackboard {
   }
 
   updateInventory(item: string, quantity: number): void {
-    this.inventory[item] = (this.inventory[item] || 0) + quantity;
+    this.inventory[item] = Math.max(0, (this.inventory[item] || 0) + quantity);
   }
 
   private computeWeights(): Record<Task["kind"], number> {

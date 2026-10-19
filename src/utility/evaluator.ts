@@ -25,5 +25,12 @@ export function scoreAction(
     Math.min(1, (blackboardState.tick - action.createdAt) / MAX_WAIT_TICKS),
   );
 
-  return energyScore + aptitude + exponential(waitRatio, 3);
+  const required = action.task.requiredItems;
+  const hasResources =
+    !required ||
+    required.length === 0 ||
+    required.every((item) => (blackboardState.inventory[item] ?? 0) > 0);
+  const resourceMultiplier = hasResources ? 1.0 : 0.05;
+
+  return (energyScore + aptitude + exponential(waitRatio, 3)) * resourceMultiplier;
 }

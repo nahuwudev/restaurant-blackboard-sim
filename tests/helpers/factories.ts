@@ -1,6 +1,7 @@
 // tests/helpers/factories.ts
 import { Agent } from "../../src/agents/agent";
 import { AGENT_ROLE } from "../../src/agents/agent.types";
+import { choice, nextInt } from "../../src/core/helpers/rng";
 import type {
   AgentSnapshot,
   BlackboardState,
@@ -17,19 +18,18 @@ export function createTestAgents(): Agent[] {
   ];
 }
 
-export function createMixedTasks(n: number) {
+export function createMixedTasks(n: number, rng: () => number = Math.random) {
   const kindTasks = Object.values(TASK_KINDS);
-
   const queue = new TaskQueue();
 
   for (let i = 0; i < n; i++) {
-    const difficulty = Math.ceil(Math.random() * 10);
+    const difficulty = nextInt(1, 10, rng);
+    const kind = choice(kindTasks, rng);
 
-    const randomIndex = Math.floor(Math.random() * kindTasks.length);
     const task: Task = {
-      difficulty: difficulty,
+      difficulty,
       id: crypto.randomUUID(),
-      kind: kindTasks[randomIndex]!,
+      kind,
       status: "pending",
       takenBy: undefined,
       requiredItems: [],

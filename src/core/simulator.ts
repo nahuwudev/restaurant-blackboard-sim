@@ -10,6 +10,7 @@ export class Simulator {
   orchestrator: Orchestrator;
   agents: Agent[];
   logger?: EventLogger;
+  private tasksCreatedLogged = false;
 
   constructor(
     agent: Agent[],
@@ -26,6 +27,18 @@ export class Simulator {
   run(ticks: number) {
     const queue = this.blackboard.getQueue();
 
+    if (this.logger && !this.tasksCreatedLogged) {
+      for (const item of queue.getAll()) {
+        this.logger.emit({
+          type: EVENT_TYPES.TASK_CREATED,
+          tick: item.createdAt ?? 0,
+          taskId: item.task.id,
+          kind: item.task.kind,
+        });
+      }
+      this.tasksCreatedLogged = true;
+    }
+
     for (let i = 0; i < ticks; i++) {
       for (const ag of this.agents) {
         const taskId = ag.currentTaskId;
@@ -39,7 +52,7 @@ export class Simulator {
           this.logger?.emit({
             type: EVENT_TYPES.TASK_COMPLETED,
             tick: this.blackboard.getTick(),
-            taskId: taskId,
+            taskId,
             agentId: ag.id,
           });
         }
@@ -47,6 +60,7 @@ export class Simulator {
 
       const snapshot = this.blackboard.getSnapshot();
       const pending = queue.pending();
+
       for (const ag of this.agents) {
         if (ag.currentTaskId !== undefined) continue;
         let best: { id: string; score: number } | undefined;
@@ -61,8 +75,35 @@ export class Simulator {
         queue,
         this.blackboard.getTick(),
       );
-      for (const { agent, task } of assigned) agent.consumeEnergy(task);
 
+      for (const { agent, task } of assigned) {
+        agent.consumeEnergy(task);
+
+        const teamBest = Math.max(
+          ...this.agents.map((ag) => ag.aptitudeFor(task)),
+        );
+
+        this.logger?.emit({
+          type: EVENT_TYPES.TASK_TAKEN,
+          tick: this.blackboard.getTick(),
+          taskId: task.id,
+          kind: task.kind,
+          agentId: agent.id,
+          aptitude: agent.aptitudeFor(task),
+          agentBest: agent.bestAptitude(),
+          teamBest,
+        });
+      }
+
+      const energies: Record<string, number> = {};
+      for (const ag of this.agents) {
+        energies[ag.id] = ag.stats.energy;
+      }
+      this.logger?.emit({
+        type: EVENT_TYPES.TICK_END,
+        tick: this.blackboard.getTick(),
+        energies,
+      });
       this.blackboard.tick();
     }
   }

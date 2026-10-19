@@ -57,6 +57,7 @@ export class TaskQueue {
 
     item.task.status = "pending";
     item.task.takenBy = undefined;
+    item.priority = Math.max(1, item.priority - 2); // Penalización: prioridad reducida
 
     return true;
   }
